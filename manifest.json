@@ -1,0 +1,9 @@
+{
+  "name": "Anin Naeem AI Letter",
+  "short_name": "LetterAI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#FF4B4B",
+  "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/1043/1043505.png", "sizes": "512x512", "type": "image/png" }]
+}
