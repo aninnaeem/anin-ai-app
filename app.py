@@ -1,49 +1,60 @@
 import streamlit as st
 from google import genai
-from docx import Document
-from io import BytesIO
-import PyPDF2
-from datetime import datetime
+import os
 
-# PWA Metadata
-st.set_page_config(page_title="Anin Naeem AI", page_icon="📝")
-st.markdown('<link rel="manifest" href="./manifest.json">', unsafe_allow_html=True)
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Anin AI App", page_icon="✍️")
 
-# Secure API Key from Streamlit Secrets
-try:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-    client = genai.Client(api_key=GEMINI_API_KEY)
-except Exception:
-    st.error("API Key missing! Please add it to Streamlit Secrets.")
-    st.stop()
+# --- INITIALIZE CLIENT ---
+def get_client():
+    try:
+        # Pulls from Streamlit Cloud Secrets
+        api_key = st.secrets["GEMINI_API_KEY"]
+        # In 2026, adding the v1beta option often fixes EU 403/401 errors
+        return genai.Client(api_key=api_key, http_options={'api_version': 'v1beta'})
+    except Exception as e:
+        st.error(f"🔑 Secret Error: Check if GEMINI_API_KEY is in Streamlit Secrets. {e}")
+        st.stop()
 
-def extract_text(file):
-    reader = PyPDF2.PdfReader(file)
-    return "".join([p.extract_text() for p in reader.pages])
+client = get_client()
 
-def generate_letter(cv, job):
-    date = datetime.now().strftime("%B %d, %Y")
-    prompt = f"Write a professional cover letter for Md. Anin Naeem (Graz, Austria) dated {date}. CV: {cv} Job: {job}"
-    response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
-    return response.text
+def generate_letter(resume_text, job_desc):
+    # Prompt with Graz, Austria context
+    prompt = f"""
+    Write a professional cover letter based on this resume and job description.
+    Location: Graz, Austria. Date: March 2026.
+    
+    Resume: {resume_text}
+    Job Description: {job_desc}
+    """
+    
+    try:
+        # We use gemini-2.0-flash for better 2026 compatibility
+        response = client.models.generate_content(
+            model="gemini-2.0-flash", 
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        # This will show the REAL error message in the app UI
+        return f"⚠️ API Error: {str(e)}"
 
-st.title("📄 AI Cover Letter Pro")
-st.caption("Portable Web App by Md. Anin Naeem")
+# --- UI ---
+st.title("🚀 Anin AI Cover Letter Generator")
+st.caption("Deployment Location: Graz, Styria | Engine: Gemini 2.0 Flash")
 
-file = st.file_uploader("Upload CV (PDF)", type="pdf")
-job = st.text_area("Paste Job Requirements")
+col1, col2 = st.columns(2)
+with col1:
+    resume = st.text_area("Paste Resume Text", height=250)
+with col2:
+    job = st.text_area("Paste Job Description", height=250)
 
-if st.button("Generate My Letter"):
-    if file and job:
-        with st.spinner("Gemini is writing..."):
-            res = generate_letter(extract_text(file), job)
-            st.session_state['out'] = res
+if st.button("Generate Cover Letter"):
+    if resume and job:
+        with st.spinner("AI is thinking..."):
+            letter = generate_letter(resume, job)
             st.markdown("---")
-            st.write(res)
-
-if 'out' in st.session_state:
-    doc = Document()
-    doc.add_paragraph(st.session_state['out'])
-    bio = BytesIO()
-    doc.save(bio)
-    st.download_button("📥 Download Word (.docx)", bio.getvalue(), "CoverLetter.docx")
+            st.markdown(letter)
+            st.download_button("Download as Text", letter, file_name="letter.txt")
+    else:
+        st.warning("Please provide both Resume and Job details.")
