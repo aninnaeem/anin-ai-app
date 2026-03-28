@@ -1,98 +1,94 @@
 import streamlit as st
 from google import genai
 import PyPDF2 as pdf
-import os
+from datetime import datetime
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Anin AI: CV to Cover Letter", page_icon="📄")
+st.set_page_config(page_title="Anin AI: Cover Letter Pro", page_icon="✍️", layout="wide")
 
-# --- INITIALIZE CLIENT ---
+# --- INITIALIZE AI CLIENT ---
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
-    # 2026 Standard Client
+    # 2026 Stable SDK Client
     client = genai.Client(api_key=api_key)
 except Exception:
-    st.error("🔑 API Key not found! Add GEMINI_API_KEY to your Streamlit Secrets.")
+    st.error("🔑 API Key missing! Add GEMINI_API_KEY to Streamlit Secrets.")
     st.stop()
 
-# --- HELPER: EXTRACT TEXT FROM PDF ---
+# --- HELPERS ---
 def extract_pdf_text(uploaded_file):
     try:
         reader = pdf.PdfReader(uploaded_file)
         text = ""
         for page in reader.pages:
             content = page.extract_text()
-            if content:
-                text += content
+            if content: text += content
         return text
     except Exception as e:
         return f"Error reading PDF: {e}"
 
-# --- AI GENERATION LOGIC ---
 def generate_letter(resume_text, job_desc):
-    # Prompt tailored for the Graz/Austrian market
+    # This prompt is optimized to be short (saves your quota/tokens)
+    current_date = datetime.now().strftime("%B %d, %2026")
     prompt = f"""
-    You are a professional recruitment expert in Graz, Austria. 
-    Write a persuasive, high-quality cover letter using the following details.
+    You are a career expert in Graz, Austria. Write a professional cover letter.
+    Date: {current_date}
+    Applicant: Md. Anin Naeem (MSc Data Science Candidate, Uni Graz)
     
-    Current Date: March 2026.
+    RESUME: {resume_text[:2000]} # Limit text to save quota
+    JOB: {job_desc[:1500]}
     
-    APPLICANT RESUME:
-    {resume_text}
-    
-    TARGET JOB DESCRIPTION:
-    {job_desc}
-    
-    REQUIREMENTS:
-    - Highlight the MSc in Data Science (University of Graz) and 6+ years of Software/GIS experience.
-    - Mention professional experience with Uttara Bank PLC and technical skills like Python/PyTorch.
-    - Tone: Professional, confident, and tailored to the specific job duties.
+    Format: Professional Business Letter. 
+    Focus: 6+ years experience, Software/GIS background, and current studies in Graz.
     """
-    
     try:
-        # gemini-2.5-flash-lite is the 2026 'throughput' champion for free tier
-        # It has a much higher quota (1,000 requests/day) than the Pro versions.
+        # gemini-2.0-flash-lite is the 'Safety Model' for 2026 free tiers
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite", 
+            model="gemini-2.0-flash-lite", 
             contents=prompt
         )
         return response.text
     except Exception as e:
         if "429" in str(e):
-            return "⚠️ Quota Limit: Please wait 60 seconds. The 2026 Free Tier is busy."
-        return f"⚠️ API Error: {str(e)}"
+            return "⚠️ Quota Exhausted: Google's free tier is busy. Please wait 1 minute."
+        return f"⚠️ AI Error: {str(e)}"
 
-# --- UI LAYOUT ---
-st.title("📄 Anin's AI Cover Letter Pro")
-st.caption("Location: Graz, Austria | Engine: Gemini 2.5 Flash-Lite")
+# --- UI INTERFACE ---
+st.title("🚀 Anin's AI Cover Letter Pro")
+st.markdown(f"**Location:** Graz, Austria | **Date:** {datetime.now().strftime('%d %B %Y')}")
 
-st.info("Upload your PDF CV from your computer and paste a job description below.")
-
-col1, col2 = st.columns(2)
+# Column Layout
+col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("1. Upload CV")
-    uploaded_file = st.file_uploader("Choose your Resume (PDF)", type="pdf")
+    st.subheader("1. Your Background")
+    tab1, tab2 = st.tabs(["Upload PDF", "Paste Text"])
     
-with col2:
-    st.subheader("2. Job Info")
-    job_details = st.text_area("Paste the Job Advertisement text here", height=200, placeholder="Example: We are looking for a Data Scientist at AVL...")
+    with tab1:
+        uploaded_file = st.file_uploader("Upload CV (PDF)", type="pdf")
+    with tab2:
+        manual_resume = st.text_area("Or paste CV text here", height=200)
 
-if st.button("🚀 Generate My Letter"):
-    if uploaded_file and job_details:
-        with st.spinner("Processing PDF and drafting your letter..."):
-            # Step 1: Extract text
-            cv_text = extract_pdf_text(uploaded_file)
-            
-            if "Error" in cv_text:
-                st.error(cv_text)
-            else:
-                # Step 2: Generate Letter
-                final_letter = generate_letter(cv_text, job_details)
-                
-                st.markdown("---")
-                st.subheader("✉️ Your Tailored Cover Letter")
-                st.write(final_letter)
-                st.download_button("📥 Download as Text", final_letter, file_name="anin_cover_letter.txt")
+with col2:
+    st.subheader("2. The Job")
+    job_details = st.text_area("Paste the Job Description here", height=275, placeholder="What job are you applying for?")
+
+# Action Button
+if st.button("✨ Generate My Professional Letter"):
+    # Determine which resume source to use
+    final_resume_text = ""
+    if uploaded_file:
+        final_resume_text = extract_pdf_text(uploaded_file)
+    elif manual_resume:
+        final_resume_text = manual_resume
+        
+    if final_resume_text and job_details:
+        with st.spinner("Analyzing data and drafting letter..."):
+            letter = generate_letter(final_resume_text, job_details)
+            st.success("Draft Ready!")
+            st.markdown("---")
+            st.subheader("✉️ Your Tailored Cover Letter")
+            st.markdown(letter)
+            st.download_button("📥 Download as Text File", letter, file_name="Anin_Cover_Letter.txt")
     else:
-        st.warning("Please provide both a PDF Resume and a Job Description.")
+        st.warning("Please provide your CV (PDF or Text) and the Job Description!")
