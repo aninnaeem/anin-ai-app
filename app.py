@@ -1,88 +1,66 @@
 import streamlit as st
 from google import genai
 import PyPDF2 as pdf
-import os
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Anin AI: CV to Letter", page_icon="📄")
+st.set_page_config(page_title="Anin's AI Letter Gen", page_icon="✍️")
 
 # --- INITIALIZE CLIENT ---
-# This pulls the key from your Streamlit Secrets dashboard
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
-    # We use the standard client without forcing v1beta to avoid 404s
     client = genai.Client(api_key=api_key)
-except Exception as e:
-    st.error("🔑 API Key missing! Add GEMINI_API_KEY to your Streamlit Secrets.")
+except Exception:
+    st.error("🔑 API Key missing in Streamlit Secrets!")
     st.stop()
 
-# --- HELPER: EXTRACT TEXT FROM PDF ---
 def extract_pdf_text(uploaded_file):
-    try:
-        reader = pdf.PdfReader(uploaded_file)
-        text = ""
-        for page in reader.pages:
-            content = page.extract_text()
-            if content:
-                text += content
-        return text
-    except Exception as e:
-        return f"Error reading PDF: {e}"
+    reader = pdf.PdfReader(uploaded_file)
+    return "".join([page.extract_text() for page in reader.pages])
 
 def generate_letter(resume_text, job_desc):
-    # Professional prompt for Graz, Austria
+    # This stricter prompt forces the AI to ACT as a writer, not a copier
     prompt = f"""
-    Write a professional cover letter based on the following details.
-    Location: Graz, Austria. Current Date: March 2026.
+    You are an expert Career Coach in Graz, Austria. 
+    TASK: Write a highly professional, persuasive Cover Letter for the applicant below.
     
-    RESUME CONTENT:
+    APPLICANT DETAILS (RESUME):
     {resume_text}
     
-    JOB DESCRIPTION:
+    TARGET JOB DESCRIPTION:
     {job_desc}
+    
+    GUIDELINES:
+    1. Use a professional business format.
+    2. Address: Graz, Austria. Date: {st.date_input("Select Date", help="Today's Date").strftime('%B %d, %2026')}.
+    3. Highlight the applicant's MSc in Data Science at Uni Graz and their 6+ years of Software/GIS experience.
+    4. Mention their German skills (A1-A2) and their background with Uttara Bank PLC.
+    5. DO NOT just repeat the CV. Connect their skills to the specific job requirements.
     """
     try:
-        # gemini-2.0-flash is the 2026 workhorse model
         response = client.models.generate_content(
             model="gemini-2.0-flash", 
             contents=prompt
         )
         return response.text
     except Exception as e:
-        if "429" in str(e):
-            return "⚠️ Quota full. Please wait 60 seconds and try again."
-        return f"⚠️ AI Error: {str(e)}"
+        return f"⚠️ Error: {str(e)}"
 
 # --- UI ---
-st.title("📄 Smart Cover Letter Generator")
-st.markdown("Upload your CV and paste a job description to get a tailored letter.")
+st.title("✍️ Anin's Smart Cover Letter Gen")
+st.markdown("Professional AI for the Graz Job Market")
 
-# Layout
-col1, col2 = st.columns(2)
+uploaded_cv = st.file_uploader("Upload your CV (PDF)", type="pdf")
+job_input = st.text_area("Paste the Job Description (The job you want)", height=200, placeholder="Example: Software Engineer at AVL or Data Scientist at Dynatrace...")
 
-with col1:
-    st.subheader("1. Your Resume")
-    uploaded_cv = st.file_uploader("Upload CV (PDF)", type="pdf")
-    
-with col2:
-    st.subheader("2. Job Details")
-    job_input = st.text_area("Paste Job Description here...", height=200)
-
-if st.button("🚀 Generate Cover Letter"):
+if st.button("Generate My Cover Letter"):
     if uploaded_cv and job_input:
-        with st.spinner("Extracting text and writing letter..."):
-            # Step 1: Read the PDF
+        with st.spinner("Writing a tailored letter for you..."):
             resume_text = extract_pdf_text(uploaded_cv)
+            letter = generate_letter(resume_text, job_input)
             
-            if "Error" in resume_text:
-                st.error(resume_text)
-            else:
-                # Step 2: Generate with Gemini
-                letter = generate_letter(resume_text, job_input)
-                
-                st.markdown("---")
-                st.subheader("✉️ Tailored Cover Letter")
-                st.write(letter)
-                st.download_button("📥 Download as Text", letter, file_name="cover_letter.txt")
+            st.success("Letter Generated!")
+            st.markdown("---")
+            st.write(letter)
+            st.download_button("Download Letter", letter, file_name="Anin_Cover_Letter.txt")
     else:
-        st.warning("Please upload your PDF CV and paste the job description first.")
+        st.warning("Please upload your PDF and paste a Job Description first!")
